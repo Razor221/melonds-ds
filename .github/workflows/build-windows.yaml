@@ -1,0 +1,52 @@
+name: Build Windows (Manual)
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: "CMake build configuration"
+        required: true
+        type: choice
+        default: "Release"
+        options:
+          - Release
+          - Debug
+          - RelWithDebInfo
+          - All
+
+jobs:
+  windows-single:
+    if: inputs.config != 'All'
+    name: Windows (x86_64) - ${{ inputs.config }}
+    uses: ./.github/workflows/pipeline.yaml
+    with:
+      archive-name: melondsds_libretro-win32-x86_64
+      runs-on: windows-latest
+      info-dir: info
+      shell: msys2 {0}
+      test-suite: false
+      cmake-args: -DENABLE_SCCACHE=ON -DSCCACHE="C:/Users/runneradmin/.cargo/bin/sccache.exe" -DENABLE_LTO_RELEASE=OFF
+      cmake-config: ${{ inputs.config }}
+    secrets: inherit
+
+  windows-all:
+    if: inputs.config == 'All'
+    name: Windows (x86_64)
+    uses: ./.github/workflows/pipeline.yaml
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [ Debug, Release, RelWithDebInfo ]
+    with:
+      archive-name: melondsds_libretro-win32-x86_64
+      runs-on: windows-latest
+      info-dir: info
+      shell: msys2 {0}
+      test-suite: false
+      cmake-args: -DENABLE_SCCACHE=ON -DSCCACHE="C:/Users/runneradmin/.cargo/bin/sccache.exe" -DENABLE_LTO_RELEASE=OFF
+      cmake-config: ${{ matrix.config }}
+    secrets: inherit
+
