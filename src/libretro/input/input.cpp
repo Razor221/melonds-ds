@@ -105,7 +105,7 @@ void InputState::Update(const CoreConfig& config, const ScreenLayoutData& layout
     retro::input_poll();
 
     // First get the raw input from libretro itself
-    InputPollResult pollResult;
+    InputPollResult pollResult {};
 
     pollResult.JoypadButtons = retro::joypad_state(0);
     if (_touchMode == TouchMode::Joystick || _touchMode == TouchMode::Auto) {
@@ -164,6 +164,7 @@ void InputState::Apply(melonDS::NDS& nds, ScreenLayoutData& layout, MicrophoneSt
 
 void InputState::SetConfig(const CoreConfig& config) noexcept {
     ZoneScopedN(TracyFunction);
+    _touchMode = config.TouchMode();
     _joypad.SetConfig(config);
     _cursor.SetConfig(config);
     _pointer.SetConfig(config);

@@ -61,35 +61,83 @@ void CursorState::Update(const CoreConfig& config, const ScreenLayoutData& layou
         ResetCursorTimeout();
     }
 
+    bool wasUsingPointer = UsingPointer() && (_pointerCursorLastUpdate > 0);
+    bool wasPointerTouching = _pointerCursorTouching;
+    uvec2 previousTouchPosition = _consoleTouchPosition;
+
     _joypadCursorTouching = joypad.IsTouching();
     _joypadCursorLastUpdate = joypad.LastPointerUpdate();
-    _pointerCursorLastUpdate = pointer.LastPointerUpdate();
-    _isTouchReleased = pointer.CursorReleased() || joypad.TouchReleased();
 
     if (_touchMode == TouchMode::Pointer || _touchMode == TouchMode::Auto) {
         _pointerRawPosition = pointer.RawPosition();
-        _pointerCursorTouching = pointer.IsTouching();
-        _pointerCursorPosition = layout.TransformPointerInput(_pointerRawPosition);
-        _hybridTouchPosition = layout.TransformPointerInputToHybridScreen(_pointerRawPosition);
+        ivec2 pointerPos = layout.TransformPointerInput(_pointerRawPosition);
+        ivec2 hybridPos = layout.TransformPointerInputToHybridScreen(_pointerRawPosition);
 
-        if (pointer.CursorActive()) {
-            // If the player moved, pressed, or released the pointer within the past frame...
+        ScreenLayout currentLayout = layout.Layout();
+        bool hasSecondaryTouchScreen = (currentLayout != ScreenLayout::TopOnly) &&
+            !((currentLayout == ScreenLayout::HybridBottom || currentLayout == ScreenLayout::FlippedHybridBottom) &&
+              layout.HybridSmallScreenLayout() == HybridSideScreenDisplay::One);
+        bool hasHybridTouchScreen = (currentLayout == ScreenLayout::HybridBottom || currentLayout == ScreenLayout::FlippedHybridBottom);
+
+        bool rawValid = (_pointerRawPosition != i16vec2(0)) || pointer.IsTouching();
+        bool inBottomBounds = rawValid && hasSecondaryTouchScreen &&
+            glm::all(glm::greaterThanEqual(pointerPos, ivec2(0))) &&
+            glm::all(glm::lessThan(pointerPos, NDS_SCREEN_SIZE<int>));
+        bool inHybridBounds = rawValid && hasHybridTouchScreen &&
+            glm::all(glm::greaterThanEqual(hybridPos, ivec2(0))) &&
+            glm::all(glm::lessThan(hybridPos, NDS_SCREEN_SIZE<int>));
+        _pointerInBounds = inBottomBounds || inHybridBounds;
+
+        if (!pointer.IsTouching()) {
+            _pointerCursorTouching = false;
+        } else if (_pointerInBounds && !wasPointerTouching) {
+            _pointerCursorTouching = true;
+            _pointerTouchingHybrid = inHybridBounds && !inBottomBounds;
+        }
+
+        if (_pointerInBounds) {
+            ivec2 activePos = inBottomBounds ? pointerPos : hybridPos;
+            _pointerCursorPosition = activePos;
+            _hybridTouchPosition = activePos;
+            if (pointer.CursorActive()) {
+                // If the player moved, pressed, or released the pointer within the past frame...
+                _pointerCursorLastUpdate = pointer.LastPointerUpdate();
+                ResetCursorTimeout();
+            }
+        } else if (_pointerCursorTouching) {
+            ivec2 activePos = clamp(_pointerTouchingHybrid ? hybridPos : pointerPos, ivec2(0), NDS_SCREEN_SIZE<int> - 1);
+            _pointerCursorPosition = activePos;
+            _hybridTouchPosition = activePos;
+            if (pointer.CursorActive()) {
+                _pointerCursorLastUpdate = pointer.LastPointerUpdate();
+                ResetCursorTimeout();
+            }
+        } else if (wasPointerTouching && !_pointerCursorTouching) {
+            _pointerCursorLastUpdate = pointer.LastPointerUpdate();
             ResetCursorTimeout();
         }
+    } else {
+        _pointerInBounds = false;
+        _pointerCursorTouching = false;
+        _pointerTouchingHybrid = false;
     }
+
+    _isTouchReleased = (wasPointerTouching && !_pointerCursorTouching) || joypad.TouchReleased();
 
     if (_touchMode == TouchMode::Joystick || _touchMode == TouchMode::Auto) {
         retro::ScreenOrientation orientation = layout.EffectiveOrientation();
         _joypadCursorTouching = joypad.IsTouching();
         _joystickRawDirection = joypad.RawCursorDirection();
         _joystickRawDirection = (i16vec2)glm::rotate(vec2(_joystickRawDirection), GetOrientationAngle(orientation));
+
+        if (wasUsingPointer && !_pointerCursorTouching && joypad.CursorActive()) {
+            // If the pointer was used more recently than the joypad cursor...
+            // Then continue using the cursor from where the pointer last left it
+            _joystickCursorPosition = vec2(previousTouchPosition);
+        }
+
         if (_joystickRawDirection != i16vec2(0)) {
             // If the player moved the joypad's cursor this frame...
-            if (_pointerCursorLastUpdate > _joypadCursorLastUpdate) {
-                // If the pointer was used more recently than the joypad cursor...
-                // Then continue using the cursor from where the pointer last left it
-                _joystickCursorPosition = _pointerCursorPosition;
-            }
             // Rotate the joypad cursor to match the screen layout (if necessary),
             // then clamp it to the touch screen's coordinates.
 
@@ -144,15 +192,14 @@ void CursorState::Update(const CoreConfig& config, const ScreenLayoutData& layou
                 // Final output
                 float finalLength = speedup_enabled ? curvedLength * speedupratio : curvedLength;
                 joystickScaled = dir * finalLength;  
+
+                _joystickCursorPosition += joystickScaled * heightSpeed;
+                _joystickCursorPosition = clamp(_joystickCursorPosition, vec2(0.0f), NDS_SCREEN_SIZE<float> - 1.0f);
             } else {
                 joystickScaled = vec2(0.0f);
             }
             //The code below sets the cursor position to the position of the joystick (absolute)
             //_joystickCursorPosition = vec2((NDS_SCREEN_WIDTH/2.0f)+(std::min<float>(1.0,(joystickNorm.x/0.7071))*(NDS_SCREEN_WIDTH/2.0f)), (NDS_SCREEN_HEIGHT/2.0f)+(std::min<float>(1.0,(joystickNorm.y/0.7071))*(NDS_SCREEN_HEIGHT/2.0f)));
-
-            _joystickCursorPosition +=  joystickScaled*heightSpeed;
-            _joystickCursorPosition = clamp(_joystickCursorPosition, vec2(1.0), NDS_SCREEN_SIZE<float> - 1.0f); 
-            
         }
         if (joypad.CursorActive()) {
             // If the player moved, pressed, or released the joystick within the past frame...
@@ -183,23 +230,30 @@ void CursorState::ResetCursorTimeout() noexcept {
 }
 
 uvec2 CursorState::ConsoleTouchPosition(const ScreenLayoutData& layout) const noexcept {
+    if (!UsingPointer()) {
+        return clamp(ivec2(_joystickCursorPosition), ivec2(0), NDS_SCREEN_SIZE<int> - 1);
+    }
+
     uvec2 clampedTouch;
 
     switch (layout.Layout()) {
         case ScreenLayout::HybridBottom:
-        case ScreenLayout::FlippedHybridBottom:
+        case ScreenLayout::FlippedHybridBottom: {
+            bool inSecondaryBounds = glm::all(glm::greaterThanEqual(_pointerCursorPosition, ivec2(0))) &&
+                                     glm::all(glm::lessThan(_pointerCursorPosition, NDS_SCREEN_SIZE<int>));
             if (layout.HybridSmallScreenLayout() == HybridSideScreenDisplay::One) {
                 // If the touch screen is only shown in the hybrid-screen position...
                 clampedTouch = clamp(_hybridTouchPosition, ivec2(0), NDS_SCREEN_SIZE<int> - 1);
                 // ...then that's the only transformation we'll use for input.
                 break;
-            } else if (!all(glm::openBounded(TouchPosition(), ivec2(0), NDS_SCREEN_SIZE<int>))) {
+            } else if (!inSecondaryBounds) {
                 // The touch screen is shown in both the hybrid and secondary positions.
                 // If the touch input is not within the secondary position's bounds...
                 clampedTouch = clamp(_hybridTouchPosition, ivec2(0), NDS_SCREEN_SIZE<int> - 1);
                 break;
             }
             [[fallthrough]];
+        }
         default:
             clampedTouch = clamp(TouchPosition(), ivec2(0), NDS_SCREEN_SIZE<int> - 1);
             break;
@@ -209,33 +263,29 @@ uvec2 CursorState::ConsoleTouchPosition(const ScreenLayoutData& layout) const no
     return clampedTouch;
 }
 
+bool CursorState::UsingPointer() const noexcept {
+    switch (_touchMode) {
+        case TouchMode::Joystick:
+            return false;
+        case TouchMode::Pointer:
+            return true;
+        case TouchMode::Auto:
+            if (_pointerCursorTouching) {
+                return true;
+            }
+
+            if (_joypadCursorTouching) {
+                return false;
+            }
+
+            return _pointerCursorLastUpdate > _joypadCursorLastUpdate;
+        default:
+            return false;
+    }
+}
+
 ivec2 CursorState::TouchPosition() const noexcept {
-    if (_touchMode == TouchMode::Joystick) {
-        // If we're using joystick mode, ignore the pointer entirely
-        return _joystickCursorPosition;
-    }
-
-    if (_touchMode == TouchMode::Pointer) {
-        // If we're using pointer mode, ignore the joystick entirely
-        return _pointerCursorPosition;
-    }
-
-    // Otherwise, prioritize whichever is currently being held down
-    if (_pointerCursorTouching) {
-        return _pointerCursorPosition;
-    }
-
-    if (_joypadCursorTouching) {
-        return _joystickCursorPosition;
-    }
-
-    // If neither the joypad nor pointer are being held down, use whichever one was most recently updated
-    if (_pointerCursorLastUpdate > _joypadCursorLastUpdate) {
-        return _pointerCursorPosition;
-    }
-
-    // Joystick's cursor was updated most recently, use it
-    return _joystickCursorPosition;
+    return UsingPointer() ? _pointerCursorPosition : ivec2(_joystickCursorPosition);
 }
 
 bool CursorState::IsTouching() const noexcept {
@@ -274,15 +324,15 @@ bool CursorState::CursorVisible() const noexcept {
 bool CursorState::IsCursorInputInBounds() const noexcept {
     switch (_touchMode) {
         case TouchMode::Pointer:
-            // Finger is touching the screen or the mouse cursor is atop the window
-            return _pointerRawPosition != i16vec2(0);
+            // Finger is touching the screen or the mouse cursor is atop the touch screen
+            return _pointerInBounds || _pointerCursorTouching;
         case TouchMode::Joystick:
             // Joystick cursor is constrained to always be on the touch screen
             return true;
         case TouchMode::Auto:
             // If the joystick cursor was last used, it's an automatic true.
-            // If the pointer was last used, see if the value is zero
-            return (_joypadCursorLastUpdate > _pointerCursorLastUpdate) || (_pointerRawPosition != i16vec2(0));
+            // If the pointer was last used, see if it's within the touch screen bounds
+            return !UsingPointer() || _pointerInBounds || _pointerCursorTouching;
         default:
             return false;
     }

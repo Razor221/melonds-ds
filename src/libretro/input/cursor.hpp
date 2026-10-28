@@ -51,6 +51,7 @@ namespace MelonDsDs {
         [[nodiscard]] bool TouchReleased() const noexcept { return _isTouchReleased; }
         [[nodiscard]] bool CursorVisible() const noexcept;
     private:
+        [[nodiscard]] bool UsingPointer() const noexcept;
         [[nodiscard]] bool IsCursorInputInBounds() const noexcept;
         [[nodiscard]] glm::uvec2 ConsoleTouchPosition(const ScreenLayoutData& layout) const noexcept;
         bool _cursorSettingsDirty = true;
@@ -65,6 +66,8 @@ namespace MelonDsDs {
         glm::uvec2 _consoleTouchPosition;
         bool _isTouchReleased;
         bool _pointerCursorTouching;
+        bool _pointerInBounds = false;
+        bool _pointerTouchingHybrid = false;
         bool _joypadCursorTouching;
         retro_perf_tick_t _joypadCursorLastUpdate;
         retro_perf_tick_t _pointerCursorLastUpdate;

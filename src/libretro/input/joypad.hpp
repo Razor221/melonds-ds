@@ -64,13 +64,11 @@ namespace MelonDsDs {
         [[nodiscard]] bool TouchReleased() const noexcept {
             return !_joystickTouchButton && _previousJoystickTouchButton;
         }
-        [[nodiscard]] bool CursorMoved() const noexcept {
-            return _joystickRawDirection != _previousJoystickRawDirection;
-        }
+        [[nodiscard]] bool CursorMoved() const noexcept;
 
         /// Return true if the joystick cursor was moved, touched, or released
         [[nodiscard]] bool CursorActive() const noexcept {
-            return CursorMoved() || (_joystickTouchButton != _previousJoystickTouchButton);
+            return CursorMoved() || _joystickTouchButton || _previousJoystickTouchButton;
         }
 
         [[nodiscard]] glm::i16vec2 RawCursorDirection() const noexcept {
@@ -94,10 +92,10 @@ namespace MelonDsDs {
         uint32_t _consoleButtons;
         unsigned _device;
         TouchMode _touchMode;
+        float _deadzone = 0.05f;
         retro_perf_tick_t _lastPointerUpdate;
         i16vec2 _joystickRawDirection;
         i16vec2 _previousJoystickRawDirection;
     };
 
 }
-

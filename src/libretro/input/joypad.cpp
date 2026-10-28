@@ -49,6 +49,16 @@ constexpr uint32_t LIGHT_LEVEL_DOWN_COMBO_ALT = (1 << RETRO_DEVICE_ID_JOYPAD_SEL
 
 void JoypadState::SetConfig(const CoreConfig& config) noexcept {
     _touchMode = config.TouchMode();
+    _deadzone = config.JoystickCursorDeadzone() / 100.0f;
+}
+
+bool JoypadState::CursorMoved() const noexcept {
+    if (_joystickRawDirection == i16vec2(0)) {
+        return false;
+    }
+
+    vec2 joystickNorm = vec2(_joystickRawDirection) / 32767.0f;
+    return glm::length(joystickNorm) > _deadzone;
 }
 
 #define ADD_KEY_TO_MASK(key, i, bits) \
@@ -112,7 +122,7 @@ void JoypadState::Update(const InputPollResult& poll) noexcept {
         _joystickTouchButton = poll.JoypadButtons & (1 << RETRO_DEVICE_ID_JOYPAD_R2); //Change to R2
         _joystickRawDirection = poll.AnalogCursorDirection;
 
-        if (_joystickTouchButton != _previousJoystickTouchButton || _joystickRawDirection != _previousJoystickRawDirection) {
+        if (CursorActive()) {
             // If the player moved, pressed, or released the joystick cursor within the past frame...
             _lastPointerUpdate = poll.Timestamp;
         }
