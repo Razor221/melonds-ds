@@ -1,11 +1,11 @@
 name: Release New Version
 on:
-  workflow_run:
-    # Run this workflow right after the build succeeds and test pass on the main branch
-    workflows: ["Main Workflow"]
-    types: [completed]
-    branches:
-      - main
+  # workflow_run:
+  #   # Run this workflow right after the build succeeds and test pass on the main branch
+  #   workflows: ["Main Workflow"]
+  #   types: [completed]
+  #   branches:
+  #     - main
   workflow_dispatch:
     # Allow manual triggering of this workflow
     inputs:

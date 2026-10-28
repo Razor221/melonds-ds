@@ -3,22 +3,22 @@ permissions:
   contents: read
 on:
   workflow_dispatch:
-  push:
-    paths-ignore:
-      - "*.gitlab-ci.yml"
-      - "*.gitignore"
-      - "*.github/ISSUE_TEMPLATE/**"
-      - "*.github/FUNDING.yml"
-  pull_request_target:
-    branches:
-      - dev
-    paths-ignore:
-      - "**.md"
-      - ".gitignore"
-      - "*.gitlab-ci.yml"
-      - "*.github/ISSUE_TEMPLATE/**"
-      - "*.github/FUNDING.yml"
-      - "*.github/workflows/**"
+  # push:
+  #   paths-ignore:
+  #     - "*.gitlab-ci.yml"
+  #     - "*.gitignore"
+  #     - "*.github/ISSUE_TEMPLATE/**"
+  #     - "*.github/FUNDING.yml"
+  # pull_request_target:
+  #   branches:
+  #     - dev
+  #   paths-ignore:
+  #     - "**.md"
+  #     - ".gitignore"
+  #     - "*.gitlab-ci.yml"
+  #     - "*.github/ISSUE_TEMPLATE/**"
+  #     - "*.github/FUNDING.yml"
+  #     - "*.github/workflows/**"
 jobs:
   assert-base-branch:
     name: Assert Base Branch
