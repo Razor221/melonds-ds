@@ -30,6 +30,11 @@ using glm::ivec2;
 using glm::uvec2;
 using glm::vec2;
 
+constexpr bool InTouchScreenBounds(ivec2 pos) noexcept {
+    return glm::all(glm::greaterThanEqual(pos, ivec2(0))) &&
+           glm::all(glm::lessThan(pos, MelonDsDs::NDS_SCREEN_SIZE<int>));
+}
+
 constexpr float GetOrientationAngle(retro::ScreenOrientation orientation) noexcept {
     switch (orientation) {
         case retro::ScreenOrientation::Normal:
@@ -80,10 +85,8 @@ void CursorState::Update(const CoreConfig& config, const ScreenLayoutData& layou
         bool hasHybridTouchScreen = (currentLayout == ScreenLayout::HybridBottom || currentLayout == ScreenLayout::FlippedHybridBottom);
 
         bool rawValid = (_pointerRawPosition != i16vec2(0)) || pointer.IsTouching();
-        bool inBottomBounds = rawValid && hasSecondaryTouchScreen &&
-            all(glm::closedBounded(pointerPos, ivec2(0), NDS_SCREEN_SIZE<int> - 1));
-        bool inHybridBounds = rawValid && hasHybridTouchScreen &&
-            all(glm::closedBounded(hybridPos, ivec2(0), NDS_SCREEN_SIZE<int> - 1));
+        bool inBottomBounds = rawValid && hasSecondaryTouchScreen && InTouchScreenBounds(pointerPos);
+        bool inHybridBounds = rawValid && hasHybridTouchScreen && InTouchScreenBounds(hybridPos);
         _pointerInBounds = inBottomBounds || inHybridBounds;
 
         if (!pointer.IsTouching()) {
@@ -101,7 +104,7 @@ void CursorState::Update(const CoreConfig& config, const ScreenLayoutData& layou
                 ResetCursorTimeout();
             }
         } else {
-            if (!hasHybridTouchScreen && !all(glm::closedBounded(_pointerCursorPosition, ivec2(0), NDS_SCREEN_SIZE<int> - 1))) {
+            if (!hasHybridTouchScreen && !InTouchScreenBounds(_pointerCursorPosition)) {
                 _pointerCursorPosition = ivec2(_consoleTouchPosition);
             }
             if (wasPointerTouching && !_pointerCursorTouching) {
@@ -236,7 +239,7 @@ uvec2 CursorState::ConsoleTouchPosition(const ScreenLayoutData& layout) const no
                 clampedTouch = clamp(_hybridTouchPosition, ivec2(0), NDS_SCREEN_SIZE<int> - 1);
                 // ...then that's the only transformation we'll use for input.
                 break;
-            } else if (!all(glm::closedBounded(TouchPosition(), ivec2(0), NDS_SCREEN_SIZE<int> - 1))) {
+            } else if (!InTouchScreenBounds(TouchPosition())) {
                 // The touch screen is shown in both the hybrid and secondary positions.
                 // If the touch input is not within the secondary position's bounds...
                 clampedTouch = clamp(_hybridTouchPosition, ivec2(0), NDS_SCREEN_SIZE<int> - 1);
