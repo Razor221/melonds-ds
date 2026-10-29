@@ -67,7 +67,6 @@ namespace MelonDsDs {
         bool _isTouchReleased;
         bool _pointerCursorTouching;
         bool _pointerInBounds = false;
-        bool _pointerTouchingHybrid = false;
         bool _joypadCursorTouching;
         retro_perf_tick_t _joypadCursorLastUpdate;
         retro_perf_tick_t _pointerCursorLastUpdate;

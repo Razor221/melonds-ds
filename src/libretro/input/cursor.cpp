@@ -81,45 +81,37 @@ void CursorState::Update(const CoreConfig& config, const ScreenLayoutData& layou
 
         bool rawValid = (_pointerRawPosition != i16vec2(0)) || pointer.IsTouching();
         bool inBottomBounds = rawValid && hasSecondaryTouchScreen &&
-            glm::all(glm::greaterThanEqual(pointerPos, ivec2(0))) &&
-            glm::all(glm::lessThan(pointerPos, NDS_SCREEN_SIZE<int>));
+            all(glm::closedBounded(pointerPos, ivec2(0), NDS_SCREEN_SIZE<int> - 1));
         bool inHybridBounds = rawValid && hasHybridTouchScreen &&
-            glm::all(glm::greaterThanEqual(hybridPos, ivec2(0))) &&
-            glm::all(glm::lessThan(hybridPos, NDS_SCREEN_SIZE<int>));
+            all(glm::closedBounded(hybridPos, ivec2(0), NDS_SCREEN_SIZE<int> - 1));
         _pointerInBounds = inBottomBounds || inHybridBounds;
 
         if (!pointer.IsTouching()) {
             _pointerCursorTouching = false;
         } else if (_pointerInBounds && !wasPointerTouching) {
             _pointerCursorTouching = true;
-            _pointerTouchingHybrid = inHybridBounds && !inBottomBounds;
         }
 
-        if (_pointerInBounds) {
-            ivec2 activePos = inBottomBounds ? pointerPos : hybridPos;
-            _pointerCursorPosition = activePos;
-            _hybridTouchPosition = activePos;
+        if (_pointerInBounds || _pointerCursorTouching) {
+            _pointerCursorPosition = pointerPos;
+            _hybridTouchPosition = hybridPos;
             if (pointer.CursorActive()) {
                 // If the player moved, pressed, or released the pointer within the past frame...
                 _pointerCursorLastUpdate = pointer.LastPointerUpdate();
                 ResetCursorTimeout();
             }
-        } else if (_pointerCursorTouching) {
-            ivec2 activePos = clamp(_pointerTouchingHybrid ? hybridPos : pointerPos, ivec2(0), NDS_SCREEN_SIZE<int> - 1);
-            _pointerCursorPosition = activePos;
-            _hybridTouchPosition = activePos;
-            if (pointer.CursorActive()) {
+        } else {
+            if (!hasHybridTouchScreen && !all(glm::closedBounded(_pointerCursorPosition, ivec2(0), NDS_SCREEN_SIZE<int> - 1))) {
+                _pointerCursorPosition = ivec2(_consoleTouchPosition);
+            }
+            if (wasPointerTouching && !_pointerCursorTouching) {
                 _pointerCursorLastUpdate = pointer.LastPointerUpdate();
                 ResetCursorTimeout();
             }
-        } else if (wasPointerTouching && !_pointerCursorTouching) {
-            _pointerCursorLastUpdate = pointer.LastPointerUpdate();
-            ResetCursorTimeout();
         }
     } else {
         _pointerInBounds = false;
         _pointerCursorTouching = false;
-        _pointerTouchingHybrid = false;
     }
 
     _isTouchReleased = (wasPointerTouching && !_pointerCursorTouching) || joypad.TouchReleased();
@@ -238,22 +230,19 @@ uvec2 CursorState::ConsoleTouchPosition(const ScreenLayoutData& layout) const no
 
     switch (layout.Layout()) {
         case ScreenLayout::HybridBottom:
-        case ScreenLayout::FlippedHybridBottom: {
-            bool inSecondaryBounds = glm::all(glm::greaterThanEqual(_pointerCursorPosition, ivec2(0))) &&
-                                     glm::all(glm::lessThan(_pointerCursorPosition, NDS_SCREEN_SIZE<int>));
+        case ScreenLayout::FlippedHybridBottom:
             if (layout.HybridSmallScreenLayout() == HybridSideScreenDisplay::One) {
                 // If the touch screen is only shown in the hybrid-screen position...
                 clampedTouch = clamp(_hybridTouchPosition, ivec2(0), NDS_SCREEN_SIZE<int> - 1);
                 // ...then that's the only transformation we'll use for input.
                 break;
-            } else if (!inSecondaryBounds) {
+            } else if (!all(glm::closedBounded(TouchPosition(), ivec2(0), NDS_SCREEN_SIZE<int> - 1))) {
                 // The touch screen is shown in both the hybrid and secondary positions.
                 // If the touch input is not within the secondary position's bounds...
                 clampedTouch = clamp(_hybridTouchPosition, ivec2(0), NDS_SCREEN_SIZE<int> - 1);
                 break;
             }
             [[fallthrough]];
-        }
         default:
             clampedTouch = clamp(TouchPosition(), ivec2(0), NDS_SCREEN_SIZE<int> - 1);
             break;
